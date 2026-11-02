@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AR Cầu Long Biên</title>
+<style>
+:root{color-scheme:dark;--bg:#14100d;--fg:#f5ece2;--ac:#e0883e;--card:rgba(20,16,13,.82)}
+*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:system-ui,"Segoe UI",Roboto,sans-serif;touch-action:none}
+#bg,video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#2a2118 center/cover}
+#bg{background:linear-gradient(#1d2b3a,#7d8794 55%,#c58a5a)}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+header{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;background:linear-gradient(#000a,#0000)}
+h1{margin:0;font-size:18px}header p{margin:2px 0 0;font-size:12px;opacity:.8}
+.hs{position:fixed;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:var(--ac);color:#000;font-weight:700;display:grid;place-items:center;border:2px solid #fff;cursor:pointer;animation:p 2s infinite;touch-action:manipulation}
+@keyframes p{50%{box-shadow:0 0 0 10px #e0883e44}}
+#card{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 118px);max-width:460px;margin:auto;background:var(--card);backdrop-filter:blur(8px);border-radius:14px;padding:12px 14px;display:none;font-size:14px;line-height:1.45}
+#card b{color:var(--ac);display:block;margin-bottom:4px;font-size:15px}
+footer{position:fixed;bottom:0;left:0;right:0;padding:10px 10px calc(env(safe-area-inset-bottom,0px) + 10px);background:linear-gradient(#0000,#000c);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:8px;overflow-x:auto;align-items:center}
+button.b{flex:none;background:var(--ac);color:#000;border:0;border-radius:20px;padding:9px 14px;font-weight:600;font-size:13px}
+button.b.o{background:#fff2;color:var(--fg)}
+.th{flex:none;width:58px;height:40px;border-radius:8px;object-fit:cover;border:2px solid transparent}.th.on{border-color:var(--ac)}
+#msg{font-size:12px;opacity:.85;text-align:center}
+</style></head><body>
+<div id="bg"></div>
+<header><h1>Cầu Long Biên · AR</h1><p>Kéo để xoay · chụm hai ngón để phóng to</p></header>
+<div id="card"></div>
+<footer>
+<div id="msg">Bật camera để đặt cây cầu vào không gian của bạn</div>
+<div class="row"><button class="b" id="cam">📷 Bật camera AR</button><button class="b o" id="spin">⟳ Tự xoay</button><button class="b o" id="paint">🎨 Sơn xám</button><button class="b o" id="reset">Đặt lại</button></div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const IMGS=[];
+const $=id=>document.getElementById(id);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.insertBefore(renderer.domElement,$('card'));
+const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(50,1,.1,300);cam.position.set(0,3.5,66);cam.lookAt(0,3,0);
+scene.add(new THREE.HemisphereLight(0xffe7cf,0x3a2a1c,1.1));
+const sun=new THREE.DirectionalLight(0xffffff,1.1);sun.position.set(15,25,20);scene.add(sun);
+const root=new THREE.Group(),bridge=new THREE.Group();root.add(bridge);scene.add(root);bridge.position.x=-18;
+const K=3.6,RUSTC=[0x9c4f2a,0x8a4426,0xb2602f,0x74391f],GREYC=[0xc4c7c9,0xb4b8ba,0xd2d4d5,0xa2a6a9];
+const mats=GREYC.map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.8,flatShading:true}));
+const conc=new THREE.MeshStandardMaterial({color:0xa8a49a,roughness:1});
+const dark=new THREE.MeshStandardMaterial({color:0x4a4d50,roughness:1});
+const steelM=new THREE.MeshStandardMaterial({color:0xb5b5b5,metalness:.6,roughness:.5});
+const V=(x,y,z)=>new THREE.Vector3(x,y,z),U=u=>u*K;
+let grey=true;
+function bar(a,b,r=.09,m){const d=b.clone().sub(a),o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,d.length(),5),m||mats[(Math.random()*4)|0]);
+ o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());bridge.add(o)}
+function box(w,h,d,x,y,z,m){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);bridge.add(o);return o}
+const Z=2.1,LZ=Z+1.35,LR=Z+2.7;
+// đường viền thanh trên (đơn vị ~100px ảnh): [vị trí, độ cao]
+const NODES=[[-4,.35],[-2.8,.40],[-1.5,.65],[0,1.45],[1.3,1.0],[2.35,.93],[3.35,.92],[4.4,.93],[5.15,.95],[6.4,1.4],[8.45,.40],[11.75,.40],[13.4,1.45],[14.7,1.0],[15.75,.93],[16.75,.92],[17.8,.93],[18.55,.95],[19.8,1.4],[21.3,.65],[22.6,.40],[23.8,.35]];
+const hAt=u=>{for(let i=0;i<NODES.length-1;i++){const a=NODES[i],b=NODES[i+1];if(u<=b[0])return a[1]+(b[1]-a[1])*(u-a[0])/(b[0]-a[0])}return NODES[NODES.length-1][1]};
+const PAN=[];for(let n=0;n<NODES.length-1;n++){const a=NODES[n][0],b=NODES[n+1][0],m=Math.ceil((b-a)/.7);for(let j=0;j<m;j++)PAN.push([a+(b-a)*j/m,a+(b-a)*(j+1)/m])}
+PAN.forEach((p,i)=>{const ua=p[0],ub=p[1],xa=U(ua),xb=U(ub),ha=U(hAt(ua)),hb=U(hAt(ub)),um=(ua+ub)/2,sl=(hAt(ub)-hAt(ua))/(ub-ua);
+ const arm=Math.abs(sl)>.25,appr=um<-1.45||um>21.35;
+ for(const z of[-Z,Z]){
+  bar(V(xa,ha,z),V(xb,hb,z),.15);
+  if(arm&&Math.min(ha,hb)>1.6)bar(V(xa,ha-.55,z),V(xb,hb-.55,z),.08);
+  bar(V(xa,0,z),V(xa,ha,z),.09);
+  if(arm){sl>0?bar(V(xa,0,z),V(xb,hb,z),.09):bar(V(xb,0,z),V(xa,ha,z),.09)}
+  else if(appr){bar(V(xa,0,z),V(xb,hb,z),.07);bar(V(xb,0,z),V(xa,ha,z),.07)}
+  else{i%2?bar(V(xa,0,z),V(xb,hb,z),.08):bar(V(xb,0,z),V(xa,ha,z),.08)}
+ }
+ bar(V(xa,ha,-Z),V(xa,ha,Z),.07);
+ if(arm){bar(V(xa,ha,-Z),V(xb,hb,Z),.05);bar(V(xa,ha,Z),V(xb,hb,-Z),.05)}
+ if(i%2==0)for(const s of[-1,1]){bar(V(xa,-1,s*Z),V(xa,.05,s*LR),.06);bar(V(xa,0,s*LR),V(xa,1.1,s*LR),.03,steelM)}
+});
+[0,6.4,13.4,19.8].forEach(u=>{const x=U(u),h=U(hAt(u));bar(V(x,h*.55,-Z),V(x,h*.55,Z),.08);bar(V(x,h,-Z),V(x,h*.55,Z),.06);bar(V(x,h,Z),V(x,h*.55,-Z),.06)});
+const X0=U(-4),X1=U(23.8),len=X1-X0,cx=(X0+X1)/2;
+box(len,1,2*Z+.4,cx,-.6,0,dark);
+box(len,.1,1.1,cx,.05,0,new THREE.MeshStandardMaterial({color:0x5b3a22}));
+for(const z of[-.5,.5])box(len,.08,.07,cx,.14,z,steelM);
+for(const s of[-1,1]){box(len,.15,2.7,cx,-.08,s*LZ,new THREE.MeshStandardMaterial({color:0x7d7a73,roughness:1}));box(len,.06,.06,cx,1.1,s*LR,steelM)}
+box(2.4,1.8,2*LR,X0-1,-.8,0,conc);box(2.4,1.8,2*LR,X1+1,-.8,0,conc);
+// trụ bê tông (mũi nhọn) & trụ khung thép
+const sh=new THREE.Shape();[[-1.2,-3],[0,-4],[1.2,-3],[1.2,3],[0,4],[-1.2,3]].forEach((p,i)=>i?sh.lineTo(p[0],p[1]):sh.moveTo(p[0],p[1]));
+const pg=new THREE.ExtrudeGeometry(sh,{depth:5,bevelEnabled:false});pg.rotateX(-Math.PI/2);
+[-2.7,0,3.35,6.4,13.4,19.8].forEach(u=>{const m=new THREE.Mesh(pg,conc);m.position.set(U(u),-6,0);bridge.add(m);box(3.2,.5,5.4,U(u),-1.25,0,conc)});
+[8.45,11.75,16.75,22.6].forEach(u=>{const x=U(u);for(const dx of[-1.3,1.3])for(const dz of[-1.9,1.9])bar(V(x+dx,-6,dz),V(x+dx,-1,dz),.1,steelM);
+ for(const dz of[-1.9,1.9])for(let l=0;l<2;l++){const y0=-6+l*2.5;bar(V(x-1.3,y0,dz),V(x+1.3,y0+2.5,dz),.06,steelM);bar(V(x+1.3,y0,dz),V(x-1.3,y0+2.5,dz),.06,steelM)}
+ box(3,.4,4.4,x,-1.15,0,dark)});
+box(.06,2.8,.8,U(6.4)+1.23,-2.6,0,new THREE.MeshStandardMaterial({color:0xf2c200}));
+bridge.position.x=-cx;
+const water=new THREE.Mesh(new THREE.PlaneGeometry(400,200),new THREE.MeshStandardMaterial({color:0xa86f45,roughness:.35}));
+water.rotation.x=-Math.PI/2;water.position.y=-3.8;root.add(water);
+const bikes=[];
+$('paint').onclick=()=>{grey=!grey;mats.forEach((m,i)=>m.color.setHex((grey?GREYC:RUSTC)[i]));$('paint').textContent=grey?'🎨 Sơn xám':'🎨 Gỉ sét'};
+// điểm thông tin
+const INFO=[];
+const hsEls=INFO.map((d,i)=>{const e=document.createElement('div');e.className='hs';e.textContent=i+1;
+ e.onclick=ev=>{ev.stopPropagation();const c=$('card');c.innerHTML='<b>'+d[1]+'</b>'+d[2];c.style.display='block'};document.body.appendChild(e);return e});
+$('card').onclick=()=>$('card').style.display='none';
+// nền ảnh
+const th=$('thumbs');IMGS.forEach((u,i)=>{const im=new Image();im.src=u;im.className='th';im.onclick=()=>{stopCam();setBg(u);[...th.children].forEach(c=>c.classList.remove('on'));im.classList.add('on')};th.appendChild(im)});
+function setBg(u){$('bg').style.backgroundImage='url('+u+')'}
+;
+let stream=null;
+async function startCam(){try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+ const v=document.createElement('video');v.id='vid';v.setAttribute('playsinline','');v.muted=true;v.srcObject=stream;document.body.insertBefore(v,$('bg'));await v.play();
+ $('bg').style.display='none';$('cam').textContent='⏹ Tắt camera';$('msg').textContent='Camera đang bật: kéo để xoay, chụm để đổi kích thước, di chuyển điện thoại để căn chỉnh';}
+ catch(e){$('msg').textContent='Không mở được camera ('+(e.name||'lỗi')+'). Hãy cho phép camera hoặc mở trang ở tab riêng; đang dùng nền ảnh thay thế.'}}
+function stopCam(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}const v=$('vid');if(v)v.remove();$('bg').style.display='';$('cam').textContent='📷 Bật camera AR'}
+$('cam').onclick=()=>stream?stopCam():startCam();
+// điều khiển
+let yaw=.2,pitch=.03,scale=1,auto=false;const ptr=new Map();let pd=0;
+$('spin').onclick=()=>{auto=!auto;$('spin').classList.toggle('o',!auto)};
+$('reset').onclick=()=>{yaw=.2;pitch=.03;scale=1;root.position.set(0,0,0)};
+addEventListener('pointerdown',e=>{if(e.target.closest('footer,.hs,#card'))return;ptr.set(e.pointerId,e);pd=0});
+addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;
+ if(ptr.size==1){yaw+=(e.clientX-p.clientX)*.007;pitch=Math.max(-.2,Math.min(1,pitch+(e.clientY-p.clientY)*.005))}
+ ptr.set(e.pointerId,e);if(ptr.size==2){const[a,b]=[...ptr.values()],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);if(pd)scale=Math.max(.3,Math.min(3,scale*d/pd));pd=d}});
+const up=e=>{ptr.delete(e.pointerId);pd=0};addEventListener('pointerup',up);addEventListener('pointercancel',up);
+addEventListener('wheel',e=>{scale=Math.max(.3,Math.min(3,scale*(e.deltaY<0?1.08:.92)))});
+function resize(){renderer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.fov=innerWidth<innerHeight?70:50;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+let last=0;
+function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,.05);last=t;
+ if(auto)yaw+=dt*.3;root.rotation.set(pitch,yaw,0);root.scale.setScalar(scale*(innerWidth<innerHeight?.4:.95));
+ bikes.forEach(m=>{const u=m.userData;u.x+=u.v*dt;if(u.x>X1)u.x=X0;if(u.x<X0)u.x=X1;m.position.set(u.x,.4,u.z)});
+ 
+ renderer.render(scene,cam);root.updateMatrixWorld(true);
+ INFO.forEach((d,i)=>{const p=bridge.localToWorld(d[0].clone()).project(cam),e=hsEls[i];
+  e.style.display=p.z<1?'grid':'none';e.style.left=(p.x+1)/2*innerWidth+'px';e.style.top=(1-p.y)/2*innerHeight+'px'})}
+requestAnimationFrame(loop);
+</script></body></html>
